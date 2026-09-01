@@ -1,0 +1,13 @@
+{
+  "name": "spay-project",
+  "version": "1.0.0",
+  "description": "SPay - Digital Payment Platform",
+  "scripts": {
+    "dev": "node -e \"console.log('\\n👉 Please run:\\n  cd backend && npm run dev   (to start backend)\\n  cd frontend && npm run dev  (to start frontend)\\n  cd backend && node view-db.js (to view database)\\n')\"",
+    "start:backend": "cd backend && npm run dev",
+    "start:frontend": "cd frontend && npm run dev",
+    "db:view": "cd backend && node view-db.js",
+    "db:setup": "cd backend && node setup-db.js"
+  }
+}
+
