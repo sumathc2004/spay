@@ -5,55 +5,44 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 async function setupDatabase() {
-  const envPwd = process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '';
-  const passwords = [
-    'Suman@123',
-    envPwd,
-    'suman@123',
-    '12345678',
-    '123456',
-    '1234',
-    '',
-    'root',
-    'password',
-    'mysql',
-    'admin',
-    'root123'
-  ];
+  console.log('Connecting to MySQL database...');
 
-  const uniquePasswords = [...new Set(passwords)];
+  const dbConfig = process.env.DATABASE_URL
+    ? {
+        uri: process.env.DATABASE_URL,
+        multipleStatements: true,
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+      }
+    : {
+        host: process.env.DB_HOST || 'localhost',
+        port: Number(process.env.DB_PORT || 3306),
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        multipleStatements: true,
+        ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
+      };
 
   let connection = null;
-  let workingPassword = null;
 
-  for (const pwd of uniquePasswords) {
-    try {
-      console.log(`Trying to connect with password: "${pwd ? '******' : '(empty)'}"`);
-      connection = await mysql.createConnection({
-        host: process.env.DB_HOST || 'localhost',
-        user: process.env.DB_USER || 'root',
-        password: pwd,
-        multipleStatements: true,
-      });
-      workingPassword = pwd;
-      console.log('✅ Connected to MySQL successfully!\n');
-      break;
-    } catch (err) {
-      if (pwd === uniquePasswords[uniquePasswords.length - 1]) {
-        console.error('\n❌ Could not connect with tested passwords.');
-        console.error('Please set DB_PASSWORD in backend/.env with your MySQL root password and run again.');
-        process.exit(1);
-      }
-    }
+  try {
+    connection = await mysql.createConnection(dbConfig);
+    console.log('✅ Connected to MySQL successfully!\n');
+  } catch (err) {
+    console.error('❌ Failed to connect to MySQL database:', err.message);
+    console.error('\n👉 Please make sure your .env has valid DB credentials:');
+    console.error('   DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, DB_PORT');
+    process.exit(1);
   }
 
   try {
-    console.log('Creating database: spay_db...');
-    await connection.query('CREATE DATABASE IF NOT EXISTS spay_db');
-    console.log('✅ Database created/exists: spay_db');
+    const dbName = process.env.DB_NAME || 'spay_db';
 
-    await connection.query('USE spay_db');
-    console.log('✅ Using database: spay_db');
+    console.log(`Creating database: ${dbName}...`);
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+    console.log(`✅ Database ready: ${dbName}`);
+
+    await connection.query(`USE \`${dbName}\``);
+    console.log(`✅ Using database: ${dbName}`);
 
     // Create users table
     await connection.query(`
@@ -102,48 +91,13 @@ async function setupDatabase() {
     // Verify tables
     const [tables] = await connection.query('SHOW TABLES');
     console.log('\n✅ Tables verified:');
-    tables.forEach(table => {
+    tables.forEach((table) => {
       console.log(`   - ${Object.values(table)[0]}`);
     });
 
-    // Insert demo user
-    console.log('\nSetting up demo user...');
-    const email = 'sumathc2004@gmail.com';
-    const password = 'Suman@123';
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const spayId = 'SPAY' + Math.random().toString(36).substring(2, 9).toUpperCase();
-
-    try {
-      const [result] = await connection.query(
-        'INSERT INTO users (name, email, phone, spay_id, password, role) VALUES (?, ?, ?, ?, ?, ?)',
-        ['Suman', email, '9876543210', spayId, hashedPassword, 'admin']
-      );
-      const userId = result.insertId;
-      await connection.query('INSERT INTO wallets (user_id, balance) VALUES (?, ?)', [userId, 25000]);
-
-      console.log(`\n✅ Demo account initialized in MySQL!`);
-      console.log(`   📧 Email: ${email}`);
-      console.log(`   🔐 Password: ${password}`);
-      console.log(`   💳 SPay ID: ${spayId}`);
-      console.log(`   💰 Balance: ₹25,000`);
-    } catch (userError) {
-      if (userError.code === 'ER_DUP_ENTRY') {
-        console.log(`   ℹ️  Demo user already exists in database.`);
-      } else {
-        throw userError;
-      }
-    }
-
     await connection.end();
-
-    // Update .env with working password
-    const envPath = path.join(__dirname, '.env');
-    let envContent = fs.readFileSync(envPath, 'utf-8');
-    envContent = envContent.replace(/DB_PASSWORD=.*/, `DB_PASSWORD=${workingPassword}`);
-    fs.writeFileSync(envPath, envContent);
-    console.log(`\n✅ Updated backend/.env with DB_PASSWORD=${workingPassword}`);
-
-    console.log('\n🎉 Real MySQL Database setup completed 100% successfully!');
+    console.log('\n🎉 MySQL Database setup completed 100% successfully!');
+    process.exit(0);
   } catch (error) {
     console.error('❌ Error during setup:', error.message);
     process.exit(1);
