@@ -553,7 +553,13 @@ button, input, textarea, select { font: inherit; }
 .quick-actions { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 28px; }
 .content-panel { padding: 28px; }
 .panel-header.compact a { color: var(--primary-2); font-weight: 800; font-size: 0.9rem; }
-.data-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 14px;
+}
+.data-table { width: 100%; min-width: 600px; border-collapse: collapse; }
 .data-table th, .data-table td { padding: 16px 14px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.92rem; }
 .data-table th { color: var(--muted); font-weight: 800; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .data-table tr { transition: background var(--transition); }

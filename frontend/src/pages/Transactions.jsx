@@ -94,36 +94,38 @@ const Transactions = () => {
                 <p>{transactions.length > 0 ? 'Try adjusting your filters.' : 'Start by sending or receiving money.'}</p>
               </div>
             ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Transaction ID</th>
-                    <th>Recipient / Sender</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                    <th>Description</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((item) => (
-                    <tr key={item.id}>
-                      <td>{item.transaction_id || `TXN-${item.id}`}</td>
-                      <td>{item.sender_name || item.receiver_name || '—'}</td>
-                      <td style={{ textTransform: 'capitalize' }}>{item.transaction_type}</td>
-                      <td>{formatAmount(item.amount)}</td>
-                      <td>{item.description || '—'}</td>
-                      <td>{formatDate(item.created_at)}</td>
-                      <td>
-                        <span className={`status ${(item.status || 'success').toLowerCase()}`}>
-                          {item.status || 'Success'}
-                        </span>
-                      </td>
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Transaction ID</th>
+                      <th>Recipient / Sender</th>
+                      <th>Type</th>
+                      <th>Amount</th>
+                      <th>Description</th>
+                      <th>Date</th>
+                      <th>Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {filtered.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.transaction_id || `TXN-${item.id}`}</td>
+                        <td>{item.sender_name || item.receiver_name || '—'}</td>
+                        <td style={{ textTransform: 'capitalize' }}>{item.transaction_type}</td>
+                        <td>{formatAmount(item.amount)}</td>
+                        <td>{item.description || '—'}</td>
+                        <td>{formatDate(item.created_at)}</td>
+                        <td>
+                          <span className={`status ${(item.status || 'success').toLowerCase()}`}>
+                            {item.status || 'Success'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         )}

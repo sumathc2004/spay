@@ -94,7 +94,7 @@ const ReceiveMoney = () => {
           </div>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', alignItems: 'start' }}>
+        <div className="receive-grid" style={{ alignItems: 'start' }}>
           
           {/* ── LEFT COLUMN: PHONEPE STYLE UPI QR STANDEE ── */}
           <section className="content-panel" style={{ padding: '32px 28px', textAlign: 'center', background: '#ffffff', borderRadius: '28px' }}>
