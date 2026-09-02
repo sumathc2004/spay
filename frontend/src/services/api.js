@@ -12,6 +12,7 @@ const api = axios.create({
 const cache = new Map();
 const CACHE_TTL = 30000; // 30 seconds
 
+// Request Interceptor: Attach JWT Token securely
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('spay_token');
   if (token) {
@@ -19,6 +20,22 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Response Interceptor: Auto-logout on 401 Unauthorized or Session Expiry
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const isAuthPage = window.location.pathname === '/login' || window.location.pathname === '/register';
+      if (!isAuthPage) {
+        localStorage.removeItem('spay_token');
+        localStorage.removeItem('spay_user');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Clear cache on any state mutation
 const invalidateCache = () => {

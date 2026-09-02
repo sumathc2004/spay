@@ -21,3 +21,4 @@ services:
         value: spay_db
       - key: DB_SSL
         value: "true"
+
