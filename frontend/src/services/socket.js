@@ -35,12 +35,12 @@ export const disconnectSocket = () => {
   }
 };
 
-// Play PhonePe / GPay style payment sound synthesized via Web Audio API
+// 1. Synthesize Melodic Payment Success Chime via Web Audio API
 export const playPaymentChime = () => {
   try {
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    // Notes: C6, E6, G6 (cheerful payment success chime)
+    // Notes: C6, E6, G6 (authentic upbeat payment chime)
     const notes = [1046.50, 1318.51, 1567.98];
     const startTime = audioCtx.currentTime;
 
@@ -61,7 +61,26 @@ export const playPaymentChime = () => {
       osc.stop(startTime + idx * 0.12 + 0.4);
     });
   } catch (_) {
-    // AudioContext blocked by browser policy until interaction
+    // AudioContext policy
   }
 };
 
+// 2. SoundBox Smart Speaker Voice Alert (Like PhonePe / Paytm Speaker)
+export const speakPaymentAlert = (amount, senderName) => {
+  try {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      const formattedAmt = Number(amount).toLocaleString('en-IN');
+      const text = `Payment of rupees ${formattedAmt} received on S-Pay from ${senderName || 'user'}.`;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.05;
+      utterance.lang = 'en-IN';
+      
+      // Delay speech slightly to let chime play first
+      setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+      }, 450);
+    }
+  } catch (_) {}
+};
