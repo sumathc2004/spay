@@ -1,6 +1,7 @@
 const { mockUsers, mockWallets, mockTransactions } = require('../demo-data');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const payoutGateway = require('../utils/payoutGateway');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'spay_demo_secret_2026';
 
@@ -225,9 +226,11 @@ const demoController = {
 
     mockWallets[req.user.id].balance += numAmount;
 
+    const utr = payoutGateway.generateUTR();
     const newTx = {
       id: mockTransactions.length + 1,
       transaction_id: `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      utr_number: utr,
       sender_id: null,
       receiver_id: req.user.id,
       sender_name: `${paymentMethod || 'UPI'} Top-up`,
@@ -235,16 +238,26 @@ const demoController = {
       amount: numAmount,
       transaction_type: 'added',
       status: 'success',
-      description: `Wallet top-up via ${paymentMethod || 'UPI'}`,
+      description: `Wallet top-up via ${paymentMethod || 'UPI'} (UTR: ${utr})`,
       created_at: new Date().toISOString()
     };
 
     mockTransactions.unshift(newTx);
 
+    // Emit live WebSocket update
+    const io = req.app?.get('io');
+    if (io) {
+      io.to(`user_${req.user.id}`).emit('wallet_updated', {
+        balance: mockWallets[req.user.id].balance,
+        transaction: newTx
+      });
+    }
+
     res.json({
       message: 'Money added successfully',
       balance: mockWallets[req.user.id].balance,
-      wallet: mockWallets[req.user.id]
+      wallet: mockWallets[req.user.id],
+      transaction: newTx
     });
   },
 
@@ -255,13 +268,77 @@ const demoController = {
     res.json(txs);
   },
 
-  // Transactions
+  // Lookup Phone Number / UPI ID / Email
+  lookupRecipient: async (req, res) => {
+    const query = (req.query.query || '').trim().toLowerCase();
+    if (!query) {
+      return res.status(400).json({ message: 'Query is required' });
+    }
+
+    // Check if searching self
+    if (
+      query === (req.user.email || '').toLowerCase() ||
+      query === req.user.phone ||
+      query === (req.user.spay_id || '').toLowerCase() ||
+      query === `${req.user.phone}@spay`
+    ) {
+      return res.status(400).json({ message: 'You cannot send money to yourself' });
+    }
+
+    // Search in mock users
+    const matched = Object.values(mockUsers).find((u) => {
+      const emailMatch = u.email.toLowerCase() === query;
+      const phoneMatch = u.phone === query;
+      const spayIdMatch = u.spay_id && u.spay_id.toLowerCase() === query;
+      const upiMatch = `${u.phone}@spay` === query || (u.spay_id && `${u.spay_id.toLowerCase()}@spay` === query);
+      return emailMatch || phoneMatch || spayIdMatch || upiMatch;
+    });
+
+    if (matched) {
+      return res.json({
+        exists: true,
+        id: matched.id,
+        name: matched.name,
+        phone: matched.phone,
+        email: matched.email,
+        spay_id: matched.spay_id,
+        upi_id: `${matched.phone}@spay`,
+        avatar: matched.name ? matched.name.charAt(0).toUpperCase() : 'U',
+        verified: true
+      });
+    }
+
+    // If it's any valid UPI handle format (e.g. rahul@okaxis, merchant@paytm), allow transfer
+    const upiCheck = await payoutGateway.validateUPI(query);
+    if (upiCheck.isValid) {
+      const parts = query.split('@');
+      const guessedName = parts[0].replace(/[._]/g, ' ').toUpperCase();
+      return res.json({
+        exists: true,
+        name: guessedName,
+        upi_id: query,
+        phone: upiCheck.type === 'phone' ? query : '',
+        avatar: guessedName.charAt(0) || 'U',
+        verified: true,
+        isExternalUPI: true
+      });
+    }
+
+    return res.status(404).json({ exists: false, message: 'Recipient not found. Check phone number or UPI ID.' });
+  },
+
+  // Transactions: Send Money with UPI PIN & WebSockets
   sendMoney: async (req, res) => {
-    const { recipient, amount, description } = req.body;
+    const { recipient, amount, description, upiPin } = req.body;
     const numAmount = Number(amount);
 
     if (!recipient || !numAmount || numAmount <= 0) {
       return res.status(400).json({ message: 'Recipient and valid amount are required' });
+    }
+
+    // Verify 4-digit UPI PIN (Demo accepts '1234' or any valid 4-digit numeric PIN)
+    if (!upiPin || String(upiPin).length < 4) {
+      return res.status(400).json({ message: 'Please enter a valid 4-digit UPI Security PIN' });
     }
 
     const senderWallet = mockWallets[req.user.id] || { balance: 0 };
@@ -274,10 +351,11 @@ const demoController = {
       (u) =>
         u.email.toLowerCase() === cleanRecip ||
         u.phone === recipient.trim() ||
-        (u.spay_id && u.spay_id.toLowerCase() === cleanRecip)
+        (u.spay_id && u.spay_id.toLowerCase() === cleanRecip) ||
+        `${u.phone}@spay` === cleanRecip
     );
 
-    const receiverName = targetUser ? targetUser.name : recipient.trim();
+    const receiverName = targetUser ? targetUser.name : (recipient.includes('@') ? recipient.split('@')[0].toUpperCase() : recipient.trim());
     const receiverId = targetUser ? targetUser.id : 999;
 
     if (targetUser && targetUser.id === req.user.id) {
@@ -292,11 +370,13 @@ const demoController = {
       mockWallets[receiverId].balance += numAmount;
     }
 
-    const txId = `TXN-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const utr = payoutGateway.generateUTR();
+    const txId = `TXN-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
 
     const senderTx = {
       id: mockTransactions.length + 1,
       transaction_id: txId,
+      utr_number: utr,
       sender_id: req.user.id,
       receiver_id: receiverId,
       sender_name: req.user.name,
@@ -304,16 +384,58 @@ const demoController = {
       amount: numAmount,
       transaction_type: 'sent',
       status: 'success',
-      description: description || 'Money transfer',
+      description: description || `Transfer to ${receiverName}`,
       created_at: new Date().toISOString()
     };
 
     mockTransactions.unshift(senderTx);
 
+    // If receiver is in mockTransactions, create their receipt
+    if (targetUser) {
+      const receiverTx = {
+        id: mockTransactions.length + 1,
+        transaction_id: `${txId}-R`,
+        utr_number: utr,
+        sender_id: req.user.id,
+        receiver_id: receiverId,
+        sender_name: req.user.name,
+        receiver_name: receiverName,
+        amount: numAmount,
+        transaction_type: 'received',
+        status: 'success',
+        description: `Received from ${req.user.name}`,
+        created_at: new Date().toISOString()
+      };
+      mockTransactions.unshift(receiverTx);
+
+      // Real-time socket notification to receiver
+      const io = req.app?.get('io');
+      if (io) {
+        io.to(`user_${receiverId}`).emit('payment_received', {
+          amount: numAmount,
+          sender_name: req.user.name,
+          transaction_id: txId,
+          utr_number: utr,
+          created_at: receiverTx.created_at,
+          balance: mockWallets[receiverId]?.balance || 0
+        });
+      }
+    }
+
+    // Real-time socket update to sender
+    const io = req.app?.get('io');
+    if (io) {
+      io.to(`user_${req.user.id}`).emit('payment_sent', {
+        balance: senderWallet.balance,
+        transaction: senderTx
+      });
+    }
+
     res.status(201).json({
       message: 'Transaction successful',
       balance: senderWallet.balance,
-      transaction: senderTx
+      transaction: senderTx,
+      utr_number: utr
     });
   },
 
