@@ -1,11 +1,27 @@
 import axios from 'axios';
 
+// Smart URL Normalizer: handles trailing slashes and missing '/api' paths automatically
+const getNormalizedApiUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (!envUrl) {
+    return 'http://localhost:5000/api';
+  }
+
+  let clean = envUrl.trim().replace(/\/+$/, '');
+  if (!clean.endsWith('/api')) {
+    clean = `${clean}/api`;
+  }
+  return clean;
+};
+
+const baseURL = getNormalizedApiUrl();
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 15000,
 });
 
 // Fast in-memory SWR Cache for GET requests

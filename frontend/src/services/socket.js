@@ -2,6 +2,22 @@ import { io } from 'socket.io-client';
 
 let socket = null;
 
+const getNormalizedSocketUrl = () => {
+  const envSocket = import.meta.env.VITE_SOCKET_URL;
+  if (envSocket) return envSocket.trim().replace(/\/+$/, '');
+
+  const envApi = import.meta.env.VITE_API_URL;
+  if (envApi) {
+    let clean = envApi.trim().replace(/\/+$/, '');
+    if (clean.endsWith('/api')) {
+      clean = clean.slice(0, -4);
+    }
+    return clean;
+  }
+
+  return 'http://localhost:5000';
+};
+
 export const initSocket = (userId) => {
   if (!userId) return null;
 
@@ -10,7 +26,7 @@ export const initSocket = (userId) => {
     return socket;
   }
 
-  const socketUrl = import.meta.env.VITE_SOCKET_URL || (import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:5000');
+  const socketUrl = getNormalizedSocketUrl();
 
   socket = io(socketUrl, {
     transports: ['websocket', 'polling'],
@@ -77,7 +93,6 @@ export const speakPaymentAlert = (amount, senderName) => {
       utterance.pitch = 1.05;
       utterance.lang = 'en-IN';
       
-      // Delay speech slightly to let chime play first
       setTimeout(() => {
         window.speechSynthesis.speak(utterance);
       }, 450);
